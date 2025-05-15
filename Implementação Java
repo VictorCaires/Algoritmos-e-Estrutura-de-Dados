@@ -1,0 +1,151 @@
+public class Ponto {
+    public double x, y;
+
+    public Ponto(double x, double y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public double[] toHomogeneo() {
+        return new double[]{x, y, 1};
+    }
+
+    public void fromHomogeneo(double[] v) {
+        this.x = v[0];
+        this.y = v[1];
+    }
+}
+
+public class Segmento {
+    public Ponto p1, p2;
+
+    public Segmento(Ponto p1, Ponto p2) {
+        this.p1 = p1;
+        this.p2 = p2;
+    }
+
+    // Multiplica ponto por matriz 3x3
+    private double[] multiplicaMatriz(double[][] m, double[] v) {
+        double[] res = new double[3];
+        for (int i = 0; i < 3; i++) {
+            res[i] = 0;
+            for (int j = 0; j < 3; j++) {
+                res[i] += m[i][j] * v[j];
+            }
+        }
+        return res;
+    }
+
+    // Translação por (tx, ty)
+    public void translacao(double tx, double ty) {
+        double[][] m = {
+            {1, 0, tx},
+            {0, 1, ty},
+            {0, 0, 1}
+        };
+        p1.fromHomogeneo(multiplicaMatriz(m, p1.toHomogeneo()));
+        p2.fromHomogeneo(multiplicaMatriz(m, p2.toHomogeneo()));
+    }
+
+    // Rotação em graus (c.c., sentido anti-horário) em torno da origem
+    public void rotacao(double graus) {
+        double rad = Math.toRadians(graus);
+        double cos = Math.cos(rad);
+        double sin = Math.sin(rad);
+
+        double[][] m = {
+            {cos, -sin, 0},
+            {sin, cos, 0},
+            {0, 0, 1}
+        };
+        p1.fromHomogeneo(multiplicaMatriz(m, p1.toHomogeneo()));
+        p2.fromHomogeneo(multiplicaMatriz(m, p2.toHomogeneo()));
+    }
+
+    // Escala em relação à origem
+    public void escala(double sx, double sy) {
+        double[][] m = {
+            {sx, 0, 0},
+            {0, sy, 0},
+            {0, 0, 1}
+        };
+        p1.fromHomogeneo(multiplicaMatriz(m, p1.toHomogeneo()));
+        p2.fromHomogeneo(multiplicaMatriz(m, p2.toHomogeneo()));
+    }
+}
+
+public class Recorte {
+    // Define a janela de recorte
+    public static final int Xmin = 50, Ymin = 10, Xmax = 200, Ymax = 200;
+
+    // Códigos para regiões fora da janela
+    static final int INSIDE = 0; // 0000
+    static final int LEFT = 1;   // 0001
+    static final int RIGHT = 2;  // 0010
+    static final int BOTTOM = 4; // 0100
+    static final int TOP = 8;    // 1000
+
+    static int computarCodigo(Ponto p) {
+        int codigo = INSIDE;
+
+        if (p.x < Xmin)
+            codigo |= LEFT;
+        else if (p.x > Xmax)
+            codigo |= RIGHT;
+        if (p.y < Ymin)
+            codigo |= BOTTOM;
+        else if (p.y > Ymax)
+            codigo |= TOP;
+
+        return codigo;
+    }
+
+    public static Segmento recortar(Segmento s) {
+        Ponto p1 = s.p1;
+        Ponto p2 = s.p2;
+
+        int codigo1 = computarCodigo(p1);
+        int codigo2 = computarCodigo(p2);
+
+        boolean aceito = false;
+
+        while (true) {
+            if ((codigo1 | codigo2) == 0) {
+                aceito = true;
+                break;
+            } else if ((codigo1 & codigo2) != 0) {
+                break;
+            } else {
+                int codigoExterno = (codigo1 != 0) ? codigo1 : codigo2;
+                double x = 0, y = 0;
+
+                if ((codigoExterno & TOP) != 0) {
+                    x = p1.x + (p2.x - p1.x) * (Ymax - p1.y) / (p2.y - p1.y);
+                    y = Ymax;
+                } else if ((codigoExterno & BOTTOM) != 0) {
+                    x = p1.x + (p2.x - p1.x) * (Ymin - p1.y) / (p2.y - p1.y);
+                    y = Ymin;
+                } else if ((codigoExterno & RIGHT) != 0) {
+                    y = p1.y + (p2.y - p1.y) * (Xmax - p1.x) / (p2.x - p1.x);
+                    x = Xmax;
+                } else if ((codigoExterno & LEFT) != 0) {
+                    y = p1.y + (p2.y - p1.y) * (Xmin - p1.x) / (p2.x - p1.x);
+                    x = Xmin;
+                }
+
+                if (codigoExterno == codigo1) {
+                    p1 = new Ponto(x, y);
+                    codigo1 = computarCodigo(p1);
+                } else {
+                    p2 = new Ponto(x, y);
+                    codigo2 = computarCodigo(p2);
+                }
+            }
+        }
+
+        if (aceito)
+            return new Segmento(p1, p2);
+        else
+            return null; // Fora da janela, descartado
+    }
+}
